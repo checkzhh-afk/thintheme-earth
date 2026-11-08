@@ -135,14 +135,16 @@ run_report() {
   [ -n "$public_ip" ] && body="$body,\"public_ip\":\"$public_ip\""
   body="$body}"
 
+  log "target status:"
+  awk '
+    /"name":/   { s=$0; sub(/.*"name":[[:space:]]*"/, "", s); sub(/".*/, "", s); n=s }
+    /"status":/ { s=$0; sub(/.*"status":[[:space:]]*"/, "", s); sub(/".*/, "", s); st=s }
+    /"code":/   { s=$0; sub(/.*"code":[[:space:]]*"/, "", s); sub(/".*/, "", s); print "  " n " -> " st " / " s }
+    /"error":/  { s=$0; sub(/.*"error":[[:space:]]*"/, "", s); sub(/".*/, "", s); if (s != "" && n != "") print "    " n " error: " s }
+  ' "$TMP_JSON" | head -n 20
+
   if [ -z "$ct$cu$cm" ]; then
     log "no recognized carrier result; report saved to /var/log/cf-route-last.json"
-    log "target status:"
-    awk '
-      /"name":/   { s=$0; sub(/.*"name":[[:space:]]*"/, "", s); sub(/".*/, "", s); n=s }
-      /"status":/ { s=$0; sub(/.*"status":[[:space:]]*"/, "", s); sub(/".*/, "", s); st=s }
-      /"code":/   { s=$0; sub(/.*"code":[[:space:]]*"/, "", s); sub(/".*/, "", s); print "  " n " -> " st " / " s }
-    ' "$TMP_JSON" | head -n 12
     die "route detection returned no usable carrier result"
   fi
 
