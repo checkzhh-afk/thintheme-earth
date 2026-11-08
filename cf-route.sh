@@ -118,6 +118,7 @@ run_report() {
 
   while read -r carrier code rank; do
     [ -n "$carrier" ] || continue
+    carrier=$(printf '%s' "$carrier" | tr '[:upper:]' '[:lower:]')
     label=$(map_code "$code") || label=""
     [ -n "$label" ] || continue
     case "$carrier" in
@@ -127,13 +128,24 @@ run_report() {
     esac
   done <"$TMP_PAIRS"
 
+  public_ip=$(curl -4 -fsS -m 10 https://api.ipify.org 2>/dev/null || true)
+
   body="{\"server_id\":\"$SERVER_ID\""
+  [ -n "$public_ip" ] && body="$body,\"public_ip\":\"$public_ip\""
   [ -n "$ct" ] && body="$body,\"ct_in\":\"$ct\""
   [ -n "$cu" ] && body="$body,\"cu_in\":\"$cu\""
   [ -n "$cm" ] && body="$body,\"cm_in\":\"$cm\""
   body="$body}"
 
-  if [ "$body" = "{\"server_id\":\"$SERVER_ID\"}" ]; then
+  if [ -z "$ct$cu$cm" ]; then
+    cp "$TMP_JSON" /var/log/cf-route-last.json 2>/dev/null || true
+    log "no recognized carrier result; report saved to /var/log/cf-route-last.json"
+    log "target status:"
+    awk '
+      /"name":/   { s=$0; sub(/.*"name":[[:space:]]*"/, "", s); sub(/".*/, "", s); n=s }
+      /"status":/ { s=$0; sub(/.*"status":[[:space:]]*"/, "", s); sub(/".*/, "", s); st=s }
+      /"code":/   { s=$0; sub(/.*"code":[[:space:]]*"/, "", s); sub(/".*/, "", s); print "  " n " -> " st " / " s }
+    ' "$TMP_JSON" | head -n 12
     die "route detection returned no usable carrier result"
   fi
 
