@@ -15,6 +15,8 @@ CRON_TAG=/usr/local/bin/cf-route
 API_PATH=/api/route
 CF_ROUTE_CONFIG=${CF_ROUTE_CONFIG:-}
 CF_ROUTE_REFRESH=${CF_ROUTE_REFRESH:-0}
+CF_ROUTE_ATTEMPTS=${CF_ROUTE_ATTEMPTS:-3}
+CF_ROUTE_TIMEOUT=${CF_ROUTE_TIMEOUT:-120s}
 TMP_JSON=${TMPDIR:-/tmp}/cf-route-report.$$
 TMP_PAIRS=${TMP_JSON}.pairs
 
@@ -95,9 +97,9 @@ run_report() {
 
   log "probing return routes (this can take 1-3 minutes)..."
   if command -v timeout >/dev/null 2>&1; then
-    timeout 300 "$BIN" -route-json -route-attempts 2 -timeout 120s >"$TMP_JSON" 2>/dev/null
+    timeout 300 "$BIN" -route-json -route-attempts "$CF_ROUTE_ATTEMPTS" -timeout "$CF_ROUTE_TIMEOUT" >"$TMP_JSON" 2>/dev/null
   else
-    "$BIN" -route-json -route-attempts 2 -timeout 120s >"$TMP_JSON" 2>/dev/null
+    "$BIN" -route-json -route-attempts "$CF_ROUTE_ATTEMPTS" -timeout "$CF_ROUTE_TIMEOUT" >"$TMP_JSON" 2>/dev/null
   fi
   [ -s "$TMP_JSON" ] || die "no report produced (traceroute failed or binary missing)"
   cp "$TMP_JSON" /var/log/cf-route-last.json 2>/dev/null || true
