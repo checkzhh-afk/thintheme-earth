@@ -131,7 +131,10 @@ run_report() {
 
   public_ip=$(curl -4 -fsS -m 10 https://api.ipify.org 2>/dev/null || true)
 
-  body="{\"server_id\":\"$SERVER_ID\",\"ct_in\":\"$ct\",\"cu_in\":\"$cu\",\"cm_in\":\"$cm\""
+  body="{\"server_id\":\"$SERVER_ID\""
+  [ -n "$ct" ] && body="$body,\"ct_in\":\"$ct\""
+  [ -n "$cu" ] && body="$body,\"cu_in\":\"$cu\""
+  [ -n "$cm" ] && body="$body,\"cm_in\":\"$cm\""
   [ -n "$public_ip" ] && body="$body,\"public_ip\":\"$public_ip\""
   body="$body}"
 
