@@ -100,6 +100,7 @@ run_report() {
     "$BIN" -route-json -route-attempts 2 -timeout 120s >"$TMP_JSON" 2>/dev/null
   fi
   [ -s "$TMP_JSON" ] || die "no report produced (traceroute failed or binary missing)"
+  cp "$TMP_JSON" /var/log/cf-route-last.json 2>/dev/null || true
 
   awk '
     /"carrier":/ { s=$0; sub(/.*"carrier":[[:space:]]*"/, "", s); sub(/".*/, "", s); c=s }
@@ -130,15 +131,11 @@ run_report() {
 
   public_ip=$(curl -4 -fsS -m 10 https://api.ipify.org 2>/dev/null || true)
 
-  body="{\"server_id\":\"$SERVER_ID\""
+  body="{\"server_id\":\"$SERVER_ID\",\"ct_in\":\"$ct\",\"cu_in\":\"$cu\",\"cm_in\":\"$cm\""
   [ -n "$public_ip" ] && body="$body,\"public_ip\":\"$public_ip\""
-  [ -n "$ct" ] && body="$body,\"ct_in\":\"$ct\""
-  [ -n "$cu" ] && body="$body,\"cu_in\":\"$cu\""
-  [ -n "$cm" ] && body="$body,\"cm_in\":\"$cm\""
   body="$body}"
 
   if [ -z "$ct$cu$cm" ]; then
-    cp "$TMP_JSON" /var/log/cf-route-last.json 2>/dev/null || true
     log "no recognized carrier result; report saved to /var/log/cf-route-last.json"
     log "target status:"
     awk '
