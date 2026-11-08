@@ -154,6 +154,33 @@ run_report() {
   log "uploaded: $response"
 }
 
+install_systemd_timer() {
+  [ -d /etc/systemd/system ] || return 1
+  command -v systemctl >/dev/null 2>&1 || return 1
+  cat >/etc/systemd/system/cf-route.service <<'EOF'
+[Unit]
+Description=Report three-carrier routes to CF-Server-Monitor
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/cf-route
+EOF
+  cat >/etc/systemd/system/cf-route.timer <<'EOF'
+[Unit]
+Description=Run cf-route every 6 hours
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  systemctl enable --now cf-route.timer >/dev/null 2>&1
+}
+
 do_install() {
   self=$0
   case "$self" in
@@ -170,8 +197,10 @@ do_install() {
     ( crontab -l 2>/dev/null | grep -vF "$CRON_TAG"; echo "23 */6 * * * $CRON_TAG >/dev/null 2>&1" ) \
       | crontab - || log "[WARN] failed to install cron entry"
     log "cron installed: every 6 hours at minute 23"
+  elif install_systemd_timer; then
+    log "systemd timer installed: every 6 hours"
   else
-    log "[WARN] crontab not found; add a systemd timer for $CRON_TAG"
+    log "[WARN] neither crontab nor systemd timer available; run $CRON_TAG manually"
   fi
 
   run_report
@@ -180,6 +209,11 @@ do_install() {
 do_uninstall() {
   if command -v crontab >/dev/null 2>&1; then
     crontab -l 2>/dev/null | grep -vF "$CRON_TAG" | crontab - 2>/dev/null
+  fi
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl disable --now cf-route.timer >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/cf-route.timer /etc/systemd/system/cf-route.service
+    systemctl daemon-reload >/dev/null 2>&1 || true
   fi
   rm -f "$CRON_TAG"
   log "uninstalled"
