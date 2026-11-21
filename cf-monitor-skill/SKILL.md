@@ -49,6 +49,17 @@ Local用Windows自带ICMP tracert，另作TCP端口连接，不是TCP traceroute
 
 安装保留旧机connection_mode和ping_mode，新机默认HTTP/TCP；auto可能按站点设置使用更频繁的WebSocket上报，不宣传更省内存。DNS按族解析，IPv4只用A、IPv6只用AAAA，Worker每15分钟最多刷1节点、各节点至少6小时间隔。DNS失败保留旧IP；手工IP不自动改；全局域名来源可跟随全局设置。测点真正变化后等待120秒历史边界，不能把旧协议或旧测点样本当新测量。
 
+
+## 已有 VPS：全部刷新或菜单选择
+
+使用仓库根目录 `cf-refresh.sh`，具体下载命令见 [操作说明](../README-CF-MONITOR.md)。无参数打开菜单：1全部刷新、2网络配置、3谷歌、4回程、5去程、6状态、0退出。`--all` 无交互；`--port=443` 可指定去程TCP端口，默认80，菜单选全部/去程时会询问。其他CLI参数：`--network / --google / --return / --outbound / --status`。
+
+全部刷新顺序：重新识别IPv4/IPv6与公网IP并apply → 立即测双栈谷歌 → 立即测双栈回程 → 提交双栈三网去程 → verify。新增IPv6优先选全部刷新；单独cf-route.sh run不会启用禁用槽，cf-monitor run会受每日/6小时冷却限制。仅想重测回程可选4，沿用原API的分类与人工锁规则。
+
+入口复用已安装脚本和本机凭据，不升级/重装Agent；配置失败停止，其他步骤失败显示对应状态。串行、加锁、回程低内存保护，无新增常驻进程。没有辅助脚本或旧版本缺少去程接口时先用cf-install.sh更新。用户在VPS执行，AI不SSH。
+
+延迟/丢包等待Agent新样本；去程“已提交”不等于成功，使用cf-monitor route-out-status查进度，成功识别自动更新面板。verify退出3结合输出区分等上报与其他未就绪，不无限重跑；0也不代表所有测点可达或每条线路都识别。当前只提供实测入口，不能宣称已在用户VPS执行。
+
 ## 交接
 
 记录执行命令（去除凭据）、节点/族/来源/协议/端口、真实城市与ASN、measurement_id/hops、结果路径、是否上传及updated数量。checked=0或updated=0不能声称写回成功。模拟结果、真实本机测试、真实远端三网测试分别标明。失败保留证据并说明缺什么，不编造CN2/9929/CMIN2或北京三网。
