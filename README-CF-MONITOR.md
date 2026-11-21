@@ -57,6 +57,18 @@ bash -c 'set -e; umask 077; f=$(mktemp); trap '\''rm -f -- "$f"'\'' EXIT; curl -
 
 ## 512MB VPS
 
-使用现有 Agent 和 Bash/curl/ip/traceroute；不要求 Node、Python、Docker 或浏览器。Agent 每 20 秒串行探测、每 60 秒 HTTP 上报；Google 每日检测，回程每 6 小时检测。systemd 辅助服务设置 MemoryMax=64M、CPUQuota=20%，这些限制不覆盖 Agent 和首次安装过程，不能当作整套监控实测峰值。
+使用现有 Agent 和 Bash/curl/ip/traceroute；不要求 Node、Python、Docker 或浏览器。Agent 每 20 秒串行探测；新机默认 HTTP/60 秒，旧机保留连接模式，auto 的实际频率跟随站点 WebSocket 配置；Google 每日检测，回程每 6 小时检测。systemd 辅助服务设置 MemoryMax=64M、CPUQuota=20%，这些限制不覆盖 Agent 和首次安装过程，不能当作整套监控实测峰值。
 
 GitHub 仅提供入口；安装仍需要访问监控站和 Agent 下载地址。首次安装可能通过系统包管理器安装缺少的基础网络工具。此公开仓库不保存节点密钥。
+
+## Windows 一键测去程（2026-11-21）
+
+```powershell
+$f=Join-Path $env:TEMP ('cf-route-out-'+[guid]::NewGuid().ToString('N')+'.ps1'); try { Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/checkzhh-afk/thintheme-earth/main/cf-route-out.ps1' -OutFile $f; & $f } finally { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
+```
+
+默认选择面板节点并隐藏输入密钥，调用中国境内电信/联通/移动远端探针，分别测IPv4/IPv6 TCP80去程，结果保存当前目录。无可用探针则如实失败；默认不改手工线路。用 `-Publish` 更新未锁定线路。
+
+本机宽带到VPS：把命令中 `& $f` 换成 `& $f -Mode Local -Target 'VPS公网IP' -Port 443`。本地tracert使用ICMP，另做TCP连接；只代表本机网络，不能代表全部三网，不自动上传。关闭VPN/TUN才能测原宽带出口。
+
+跨AI规则见仓库 `cf-monitor-skill/SKILL.md`；项目权威源码位于CF-Server-Monitor/skills/cf-server-monitor-ops。
