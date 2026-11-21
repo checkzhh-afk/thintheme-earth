@@ -120,7 +120,7 @@ register_named_node() (
         fi
         mkdir -p /etc/config/cf-probe
         printf 'SERVER_ID=""\nSECRET="%s"\nWORKER_URL="%s"\nNAME="%s"\n' "$registration_secret" "$endpoint" "$NODE_NAME" > "$registration_tmp/config.conf"
-        printf 'COLLECT_INTERVAL="0"\nREPORT_INTERVAL="60"\nCONNECTION_MODE="http"\nPING_MODE="icmp"\nUA="cfsm"\nAUTO_UPDATE="0"\nCONFIG_MD5="none"\n' >> "$registration_tmp/config.conf"
+        printf 'COLLECT_INTERVAL="0"\nREPORT_INTERVAL="60"\nCONNECTION_MODE="http"\nPING_MODE="tcp"\nUA="cfsm"\nAUTO_UPDATE="0"\nCONFIG_MD5="none"\n' >> "$registration_tmp/config.conf"
         for slot in CT_NODE CU_NODE CM_NODE BD_NODE NODE_1 NODE_2 NODE_3 NODE_4; do
             printf '%s="0"\n' "$slot" >> "$registration_tmp/config.conf"
         done
