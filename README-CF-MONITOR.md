@@ -50,4 +50,6 @@ bash -c 'set -e; umask 077; f=$(mktemp); trap '\''rm -f -- "$f"'\'' EXIT; curl -
 - 面板将旧 CUG 标签显示为 10099；仅AS10099不能当9929。识别到AS9929优先9929。ASN识别由Worker执行，Cymru失败时在原请求/时间预算内查询RIPEstat，证据写入classification。不能把旧hops重新提交伪装新测量。
 - 自动回程无结果时保留上次成功线路，并显示“历史”；旧测量时间不变，失败时间和证据保存于last_attempt。成功新测量替换旧结果；人工锁继续保护。没有旧成功结果时显示未识别/无结果。
 - 更新脚本不删除metrics、线路历史、节点身份、名称、流量或计费信息。重复应用相同有效配置不重置probes_since。确实改变测点/协议时，当前图表从新边界重新显示，避免混合不同测点样本；数据库历史未删除。
-- 服务端修复不等于所有VPS已更新。使用doctor确认辅助脚本版本2026.11.21.1，再检查status/verify；等待Agent新上报和去程任务完成，不能将任务已提交写成测量成功。
+- 服务端修复不等于所有VPS已更新。使用doctor确认辅助脚本版本2026.11.21.2，再检查status/verify；等待Agent新上报和去程任务完成，不能将任务已提交写成测量成功。
+
+安装器已修复 traceroute 的 `-N` 功能检查在 `pipefail` 下因提前关闭管道而误报的问题。遇到旧版 `A full traceroute with -N support is required.` 时重新运行公共 GitHub 安装命令；不要删除 Agent 配置或跳过依赖检查。真正不支持 `-N` 时仍自动安装系统 traceroute 包并重新检查，失败则在节点配置变更前停止。
