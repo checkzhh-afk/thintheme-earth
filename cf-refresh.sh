@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Refresh existing CF Monitor measurements. No Agent installation or upgrade.
+# CF Monitor menu: refresh measurements or explicitly update the helper bundle.
 set +x
 set -uo pipefail
 umask 077
 
 usage() {
     cat <<'HELP'
-用法：bash cf-refresh.sh [--menu|--all|--network|--google|--return|--outbound|--status] [--port=80]
+用法：bash cf-refresh.sh [--menu|--all|--network|--google|--return|--outbound|--status|--update] [--port=80]
 默认打开菜单；--all 无需交互，刷新双栈配置、谷歌、回程并提交双栈去程。
 --port 只用于去程任务，填写 VPS 实际监听的 TCP 端口，默认 80。
 --network 只刷新网络配置；--google/--return 使用已有配置检测双栈。
 --status 查看依赖、验收及去程任务状态，不触发测量。
+--update 更新辅助脚本和 cfm 菜单并自动验收；保留现有 Agent，不升级 Agent 版本。
 退出码：0 操作完成；1 部分步骤失败；2 用法/依赖错误；3 等待验收；75 有任务运行或低内存暂缓。
 HELP
 }
@@ -21,7 +22,7 @@ PORT_SET=0
 ACTION_SET=0
 for arg in "$@"; do
     case "$arg" in
-        --menu|--all|--network|--google|--return|--outbound|--status)
+        --menu|--all|--network|--google|--return|--outbound|--status|--update)
             [ "$ACTION_SET" = 0 ] || { echo '一次只能选择一种操作。' >&2; exit 2; }
             ACTION=${arg#--}; ACTION_SET=1 ;;
         --port=*) PORT=${arg#*=}; PORT_SET=1 ;;
@@ -50,16 +51,17 @@ ask_port() {
 if [ "$ACTION" = menu ]; then
     cat <<'MENU'
 
-CF Monitor 刷新菜单（IPv4 + IPv6）
+CF Monitor 管理菜单（IPv4 + IPv6）
   1) 全部刷新（网络配置 → 谷歌 → 回程 → 提交去程 → 验收）
   2) 只刷新网络配置（新增 IPv6 / 公网 IP 变化时使用）
   3) 只重新检测谷歌送中
   4) 只重新检测三网回程（VPS → 中国）
   5) 只提交三网去程（中国 → VPS）
   6) 查看依赖、验收和去程进度
+  7) 更新辅助脚本和 cfm 菜单（保留现有 Agent）
   0) 退出
 MENU
-    printf '选择 [0-6]：'
+    printf '选择 [0-7]：'
     IFS= read -r choice || { echo '未读到选择；已取消。自动运行请用 --all。' >&2; exit 2; }
     case "$choice" in
         1) ACTION=all; ask_port || exit $? ;;
@@ -68,6 +70,7 @@ MENU
         4) ACTION=return ;;
         5) ACTION=outbound; ask_port || exit $? ;;
         6) ACTION=status ;;
+        7) ACTION=update ;;
         0) exit 0 ;;
         *) echo '选择无效；已取消。' >&2; exit 2 ;;
     esac
@@ -84,9 +87,32 @@ for script in cf-google.sh cf-route.sh; do
         [ -r "$REFRESH_DIR/$script" ] || { echo "缺少 $script，请先更新辅助监控脚本。" >&2; exit 2; }
     fi
 done
-# No permanent helper. The existing scripts retain their timer lock, timeouts,
-# route memory guard and serial probes. Do not inherit a caller's lock bypass.
+# Do not inherit a caller's lock bypass.
 unset CF_LOCK_HELD
+# Updating uses the current node's Worker and config, never registration credentials.
+# Run before acquiring the refresh lock or lowering limits: the installer owns its
+# install lock and diagnostics. It must not inherit the measurement memory limit.
+update_bundle() (
+    set -euo pipefail
+    [ -r "$REFRESH_DIR/cf-common.sh" ] || { echo '缺少 cf-common.sh，请运行公共一键安装/更新命令。' >&2; exit 2; }
+    source "$REFRESH_DIR/cf-common.sh"
+    cf_temp
+    cf_read_config
+    [[ "$CF_API" =~ ^https://[a-zA-Z0-9.-]+(:[0-9]+)?$ ]] || { echo '配置中的 Worker 地址无效。' >&2; exit 2; }
+    export CF_PROBE_CONFIG="$CONFIG_FILE"
+    echo '更新辅助脚本与 cfm 菜单；自动执行安装检查。'
+    curl --noproxy '*' -fsSL --proto '=https' --proto-redir '=https' \
+        --connect-timeout 10 --max-time 90 --retry 1 -A "$UA" \
+        "$CF_API/files/cf-install.sh" -o "$CF_TMP/cf-install.sh"
+    bash -n "$CF_TMP/cf-install.sh"
+    bash "$CF_TMP/cf-install.sh" "--url=$CF_API"
+)
+if [ "$ACTION" = update ]; then
+    update_bundle
+    exit $?
+fi
+# No permanent helper. The existing scripts retain their timer lock, timeouts,
+# route memory guard and serial probes.
 ulimit -v 131072 2>/dev/null || true
 if command -v renice >/dev/null; then renice -n 15 -p "$$" >/dev/null 2>&1 || true; fi
 if [ "$ACTION" != status ]; then

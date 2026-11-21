@@ -52,7 +52,7 @@ Local用Windows自带ICMP tracert，另作TCP端口连接，不是TCP traceroute
 
 ## 已有 VPS：全部刷新或菜单选择
 
-使用仓库根目录 `cf-refresh.sh`，具体下载命令见 [操作说明](../README-CF-MONITOR.md)。无参数打开菜单：1全部刷新、2网络配置、3谷歌、4回程、5去程、6状态、0退出。`--all` 无交互；`--port=443` 可指定去程TCP端口，默认80，菜单选全部/去程时会询问。其他CLI参数：`--network / --google / --return / --outbound / --status`。
+新版安装/更新自动创建 `cfm`，无需第二条命令。直接输入 `cfm` 打开菜单，`cfm --update` 或第7项更新辅助脚本与菜单，保留现有Agent版本；`cfm --status`查看状态。也可使用仓库根目录 `cf-refresh.sh`，具体下载命令见 [操作说明](../README-CF-MONITOR.md)。无参数打开菜单：1全部刷新、2网络配置、3谷歌、4回程、5去程、6状态、7更新辅助脚本与cfm、0退出。`--all` 无交互；`--port=443` 可指定去程TCP端口，默认80，菜单选全部/去程时会询问。其他CLI参数：`--network / --google / --return / --outbound / --status / --update`。
 
 全部刷新顺序：重新识别IPv4/IPv6与公网IP并apply → 立即测双栈谷歌 → 立即测双栈回程 → 提交双栈三网去程 → verify。新增IPv6优先选全部刷新；单独cf-route.sh run不会启用禁用槽，cf-monitor run会受每日/6小时冷却限制。仅想重测回程可选4，沿用原API的分类与人工锁规则。
 
@@ -67,9 +67,9 @@ Local用Windows自带ICMP tracert，另作TCP端口连接，不是TCP traceroute
 
 ## 2026-11-21 能力保护与线路识别
 
-- 已安装旧辅助脚本的 VPS，先执行公共 GitHub 的 cf-install.sh 一键更新，之后用 cf-refresh.sh 选择刷新项目。cf-refresh.sh 不升级已安装代码；直接 cf-route.sh run 只刷新回程。
+- 已安装旧辅助脚本的 VPS，先执行公共 GitHub 的 cf-install.sh 一键更新，安装会自动创建 cfm，之后输入 cfm 选择刷新项目。cfm 默认菜单及 --all 只刷新数据；选7或 --update 才更新辅助脚本；直接 cf-route.sh run 只刷新回程。
 - curl 的网络能力检查每族 connect=10秒、total=20秒；这是上限，成功即返回。任一族超时/无法确认记 unknown，禁止应用部分配置，保留原测点和公网IP。本地确实没有该族路由才记 unavailable；兼容只有IPv4或只有IPv6。
 - 面板将旧 CUG 标签显示为 10099；仅AS10099不能当9929。识别到AS9929优先9929。ASN识别由Worker执行，Cymru失败时在原请求/时间预算内查询RIPEstat，证据写入classification。不能把旧hops重新提交伪装新测量。
 - 自动回程无结果时保留上次成功线路，并显示“历史”；旧测量时间不变，失败时间和证据保存于last_attempt。成功新测量替换旧结果；人工锁继续保护。没有旧成功结果时显示未识别/无结果。
 - 更新脚本不删除metrics、线路历史、节点身份、名称、流量或计费信息。重复应用相同有效配置不重置probes_since。确实改变测点/协议时，当前图表从新边界重新显示，避免混合不同测点样本；数据库历史未删除。
-- 服务端修复不等于所有VPS已更新。使用doctor确认辅助脚本版本2026.11.21，再检查status/verify；等待Agent新上报和去程任务完成，不能将任务已提交写成测量成功。
+- 服务端修复不等于所有VPS已更新。使用doctor确认辅助脚本版本2026.11.21.1，再检查status/verify；等待Agent新上报和去程任务完成，不能将任务已提交写成测量成功。
