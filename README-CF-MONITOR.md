@@ -1,8 +1,8 @@
 # 当前一键安装与三网去程
 
-新 VPS：登录监控后台 → 自动发现 → Linux / 当前用户（root 或 sudo）→ 填名称 → 复制完整命令执行。命令已包含认证，通过 --secret-stdin 传入，无需再输入密钥。不要公开复制的认证命令。
+新 VPS：登录监控后台 → 自动添加（需开启自动发现）→ Linux / 当前用户（root 或 sudo）→ 填名称 → 复制完整命令执行。命令已包含认证，通过 --secret-stdin 传入，无需再输入密钥。不要公开复制的认证命令。
 
-已有 VPS：
+已有 VPS：在后台该节点行点击 📋，选择 Linux / 当前用户，复制完整命令执行；也可以使用下面不含凭据的通用更新命令：
 
 ```bash
 bash -c 'set -e; umask 077; f=$(mktemp); trap '\''rm -f -- "$f"'\'' EXIT; curl --noproxy "*" -fsSL --proto "=https" --proto-redir "=https" --connect-timeout 10 --max-time 90 --retry 1 https://raw.githubusercontent.com/checkzhh-afk/thintheme-earth/main/cf-install.sh -o "$f"; bash -n "$f"; bash "$f"'

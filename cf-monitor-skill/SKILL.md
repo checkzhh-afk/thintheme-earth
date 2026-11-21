@@ -18,7 +18,7 @@ description: 跨AI操作本实例的VPS监控安装、IPv4/IPv6三网去程测�
 
 ## 推荐：后台或VPS一键提交
 
-新VPS：登录监控后台 → 自动发现 → Linux / 当前用户（root或sudo）→ 填名称 → 复制完整命令执行。认证通过stdin传入，无需再输入密钥；复制命令不要公开。已有VPS：执行仓库cf-install.sh，无需名称和密钥，复用现有配置。安装自动提交双栈TCP80去程任务，自动doctor/status/verify一次。
+新VPS：登录监控后台 → 自动添加（需开启自动发现）→ Linux / 当前用户（root或sudo）→ 填名称 → 复制完整命令执行。认证通过stdin传入，无需再输入密钥；复制命令不要公开。已有VPS：执行仓库cf-install.sh，无需名称和密钥，复用现有配置。安装自动提交双栈TCP80去程任务，自动doctor/status/verify一次。
 
 后台节点列表点击🌐“检测三网去程”；或VPS执行 `cf-monitor route-out`、`cf-monitor route-out ipv4 443`。查看进度用 `cf-monitor route-out-status`。任务保存在Worker/D1，关闭页面继续，重复提交复用活跃任务。通常数分钟到十几分钟，不保证三网或IPv6探针都有供应。VPS不增加常驻进程。
 
