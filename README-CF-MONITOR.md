@@ -1,6 +1,6 @@
 # VPS 双栈监控一键安装
 
-此仓库的 `cf-install.sh` 是公开的轻量入口，下载并调用当前监控站的正式安装器。安装器与检测脚本仍统一由 Worker 提供，不在此复制维护。无需在 VPS 安装 Git。
+此仓库的 `cf-install.sh` 是公开的轻量入口，下载并调用当前监控站的正式安装器。按名称自动注册由此入口完成，监控安装器与检测脚本仍统一由 Worker 提供。无需在 VPS 安装 Git。
 
 监控站： https://cf-server-monitor.checkzhh.workers.dev
 
@@ -11,10 +11,35 @@ bash -c 'set -e; umask 077; f=$(mktemp); trap '\''rm -f -- "$f"'\'' EXIT; curl -
 ```
 
 - 已有 Agent：自动复用原节点 ID 和密钥，安装双栈监控辅助功能。配置冲突时停止并提示，不强制覆盖。
-- 新 VPS：先在监控后台创建节点，再执行命令；按终端提示输入节点 ID 和 API secret，密钥输入不回显。
+- 新 VPS：推荐使用下面的 `NAME` 命令自动建号，无需先在后台创建节点。上方不带名称的旧命令仍支持手动输入后台已创建的 ID。
 - 已成功安装的节点无需因网页布局更新而重装；每台 VPS 独立执行，不能在一台上替其他所有机器安装。
 - IPv6 需要 VPS 自身具有可用 IPv6 网络；脚本不能代替服务商开通 IPv6。
 - Google 送中以实际 3xx Location 跳转到 google.com.hk 或其子域判断，IPv4/IPv6 分开检测。
+
+## 新 VPS：填写名称后自动接入
+
+修改第一行的名称，将整段复制到 VPS 的 SSH 终端执行。API secret 会提示隐藏输入一次；不要把真实密钥写入公开命令或仓库。
+
+```bash
+(
+  set -e
+  NAME="my-vps-01"
+  umask 077
+  f=$(mktemp)
+  trap 'rm -f -- "$f"' EXIT
+  curl --noproxy '*' -fsSL --proto '=https' --proto-redir '=https' \
+    --connect-timeout 10 --max-time 90 --retry 1 \
+    https://raw.githubusercontent.com/checkzhh-afk/thintheme-earth/main/cf-install.sh -o "$f"
+  bash -n "$f"
+  bash "$f" --name="$NAME"
+)
+```
+
+名称支持 1–100 个英文字母、数字、空格、点、下划线和连字符，首字符为字母或数字，例如 `LA-MINI-02`、`HK-01`。每台新 VPS 用不同名称；该参数不会重命名已有节点。
+
+入口在新机下载并校验固定 v1.1.3 Agent，保存仅 root 可读的配置，由 Agent 真实上报自动注册，最多等待 120 秒拿到非空节点 ID，再执行正式低内存双栈安装和三项检查。已注册节点直接复用；本入口留下的待注册配置支持同名重跑，身份、密钥不被覆盖。`--name` 单独使用，不与手动 `--id` / `--secret-stdin` 等选项混用。
+
+自动建号需要监控后台开启“自动发现”（本实例于 2026-11-21 已只读确认开启）。重名、密钥错误、网络失败或开关关闭时会停止并保留配置，请处理实际原因；不要删除配置反复建号。自定义路径或非 root 用户已有 Agent 应走原有配置复用流程。基础要求为 Bash、curl、flock、sha256sum、timeout，以及可运行的 systemd 或 cron；不新增常驻辅助进程。
 
 ## 安装后自动检查
 
