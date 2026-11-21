@@ -17,19 +17,30 @@ fi
 # --name is handled here; the Worker installer remains the single monitoring bundle.
 NODE_NAME=''
 NAME_SET=0
+REGISTER_STDIN=0
+ORIGIN=https://cf-server-monitor.checkzhh.workers.dev
 FORWARD=()
 for arg in "$@"; do
     case "$arg" in
+        --secret-stdin) REGISTER_STDIN=1 ;;
+        --url=*) ORIGIN=${arg#*=}; FORWARD+=("$arg") ;;
         --name=*) NODE_NAME=${arg#*=}; NAME_SET=$((NAME_SET + 1)) ;;
         *) FORWARD+=("$arg") ;;
     esac
 done
+[[ "$ORIGIN" =~ ^https://[a-zA-Z0-9.-]+(:[0-9]+)?$ ]] || { echo 'Invalid HTTPS origin' >&2; exit 2; }
+if [ "$NAME_SET" = 0 ] && [ "$REGISTER_STDIN" = 1 ]; then FORWARD+=(--secret-stdin); fi
 if [ "$NAME_SET" != 0 ]; then
-    if [ "$NAME_SET" != 1 ] || [ "${#FORWARD[@]}" != 0 ] ||
+    if [ "$NAME_SET" != 1 ] ||
        ! [[ "$NODE_NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9._\ -]{0,99}$ ]]; then
-        echo 'Use --name="my-vps-01" alone (1-100 letters, digits, spaces, dots, underscores or hyphens).' >&2
+        echo 'Use --name="my-vps-01" (1-100 letters, digits, spaces, dots, underscores or hyphens).' >&2
         exit 2
     fi
+    for forwarded in "${FORWARD[@]}"; do
+        case "$forwarded" in
+            --id=*|--secret=*) echo 'Do not combine --name with --id or --secret; use the admin-generated command.' >&2; exit 2 ;;
+        esac
+    done
     config_hint=${CF_PROBE_CONFIG:-${CF_ROUTE_CONFIG:-}}
     if [ -n "$config_hint" ] && [ "$config_hint" != /etc/config/cf-probe/config.conf ]; then
         echo 'For a custom Agent config, use the entry without --name.' >&2; exit 2
@@ -38,14 +49,14 @@ if [ "$NAME_SET" != 0 ]; then
         echo 'An existing user Agent needs to be reused explicitly; no root Agent was created.' >&2; exit 2
     fi
     # Re-enter before reading credentials; sudo need not preserve environment variables.
-    if [ "$(id -u)" != 0 ]; then exec sudo bash "$0" "--name=$NODE_NAME"; fi
+    if [ "$(id -u)" != 0 ]; then exec sudo bash "$0" "$@"; fi
 fi
 
 register_named_node() (
     set -euo pipefail
     local_config=/etc/config/cf-probe/config.conf
     pending=/etc/config/cf-probe/.cf-monitor-register-pending
-    endpoint=https://cf-server-monitor.checkzhh.workers.dev/update
+    endpoint="$ORIGIN/update"
     config_value() {
         local key value result=''
         while IFS='=' read -r key value || [ -n "${key:-}" ]; do
@@ -108,13 +119,17 @@ register_named_node() (
     printf '%s  %s\n' "$expected" "$registration_tmp/cf-probe" | sha256sum -c - >/dev/null
     chmod 700 "$registration_tmp/cf-probe"
     if [ ! -e "$local_config" ]; then
-        if ! { exec 7<> /dev/tty; } 2>/dev/null; then
-            echo 'A terminal is required to enter the API secret. Run the command in an SSH terminal.' >&2; exit 2
+        if [ "$REGISTER_STDIN" = 1 ]; then
+            IFS= read -r registration_secret || { echo 'Missing secret on stdin' >&2; exit 2; }
+        else
+            if ! { exec 7<> /dev/tty; } 2>/dev/null; then
+                echo 'Use the authenticated command copied from the admin panel.' >&2; exit 2
+            fi
+            printf 'API secret (hidden): ' >&2
+            IFS= read -rs registration_secret <&7 || { printf '\nSecret input cancelled.\n' >&2; exit 2; }
+            printf '\n' >&2
+            exec 7>&-
         fi
-        printf 'API secret (hidden): ' >&2
-        IFS= read -rs registration_secret <&7 || { printf '\nSecret input cancelled.\n' >&2; exit 2; }
-        printf '\n' >&2
-        exec 7>&-
         if [ -z "$registration_secret" ] || [[ "$registration_secret" == *[[:cntrl:]]* || "$registration_secret" == *'"'* || "$registration_secret" == *'\'* ]]; then
             echo 'Invalid API secret.' >&2; exit 2
         fi
@@ -154,7 +169,7 @@ trap 'rm -f -- "$CF_INSTALL"' EXIT
 curl --noproxy '*' -fsSL \
     --proto '=https' --proto-redir '=https' \
     --connect-timeout 10 --max-time 90 --retry 1 -A cfsm \
-    'https://cf-server-monitor.checkzhh.workers.dev/files/cf-install.sh' \
+    "$ORIGIN/files/cf-install.sh" \
     -o "$CF_INSTALL"
 bash -n "$CF_INSTALL"
 # Keep failures visible while running lightweight post-install diagnostics.
@@ -162,44 +177,5 @@ as_root() {
     if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi
 }
 if [ "$NAME_SET" = 1 ]; then register_named_node; fi
-install_rc=0
-as_root bash "$CF_INSTALL" --url='https://cf-server-monitor.checkzhh.workers.dev' "${FORWARD[@]}" || install_rc=$?
-if [ "$install_rc" != 0 ] && [ "$install_rc" != 3 ]; then
-    printf '\n安装未完成（退出码 %s），请查看上方错误。\n' "$install_rc" >&2
-    exit "$install_rc"
-fi
-
-# Exit 3 can mean a plan conflict OR pending verification. Never turn it into
-# success just because an older installed service still passes its checks.
-monitor_path=$(as_root bash -c 'command -v cf-monitor' || true)
-if [ -z "$monitor_path" ]; then
-    printf '\n安装未完成：尚未找到 cf-monitor，请查看上方冲突或错误。\n' >&2
-    if [ "$install_rc" != 0 ]; then exit "$install_rc"; else exit 1; fi
-fi
-
-check_rc=0
-verify_rc=0
-for action in doctor status verify; do
-    case "$action" in
-        doctor) printf '\n[1/3] 检查依赖与可用内存\n' ;;
-        status) printf '\n[2/3] 读取监控状态\n' ;;
-        verify) printf '\n[3/3] 验证定时任务与数据上报\n' ;;
-    esac
-    rc=0
-    as_root "$monitor_path" "$action" || rc=$?
-    printf '\n'
-    if [ "$action" = verify ]; then verify_rc=$rc; fi
-    if [ "$rc" != 0 ] && [ "$check_rc" = 0 ]; then check_rc=$rc; fi
-done
-if [ "$install_rc" != 0 ]; then
-    printf '本次安装尚未通过验收（退出码 %s）。三项检查已自动执行，请查看上方冲突或未就绪原因。\n' "$install_rc" >&2
-    exit "$install_rc"
-elif [ "$check_rc" = 0 ]; then
-    printf '安装完成，三项检查全部通过，无需再手动执行检查命令。\n'
-elif [ "$check_rc" = 3 ] && [ "$verify_rc" = 3 ]; then
-    printf '安装已完成，但监控尚未就绪；请查看上方定时任务或数据上报状态。\n' >&2
-    exit 3
-else
-    printf '安装流程已完成，但检查未全部通过（退出码 %s），请查看上方结果。\n' "$check_rc" >&2
-    exit "$check_rc"
-fi
+# The deployed installer performs doctor/status/verify exactly once and submits the outbound job.
+as_root bash "$CF_INSTALL" "--url=$ORIGIN" "${FORWARD[@]}"
