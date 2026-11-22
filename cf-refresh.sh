@@ -160,7 +160,7 @@ network() {
 }
 google() { step '立即检测并上报双栈谷歌 HK 跳转结果' bash "$REFRESH_DIR/cf-google.sh" run; }
 routes() {
-    step '立即检测并上报三网回程（串行，可能需要数分钟）' bash "$REFRESH_DIR/cf-route.sh" run
+    step '立即检测并上报三网回程（串行，失败项最多再试3次，可能需要数分钟）' bash "$REFRESH_DIR/cf-route.sh" run
     local rc=$?
     [ "$rc" = 0 ] || return "$rc"
     echo '回程检测结束：逐项结果见上方；“已更新”表示已写入新识别，“保留历史”表示本次未识别成功。禁用测点会跳过。'
@@ -190,4 +190,4 @@ esac
 [ "$FAILED" = 0 ] || { echo '部分步骤未完成，请根据上方错误重试对应单项。' >&2; exit 1; }
 [ "$DEFERRED" = 0 ] || exit 75
 [ "$PENDING" = 0 ] || exit 3
-printf '\n操作已结束，实际检测结果见上方；去程任务和 Agent 新样本可能仍在等待中。\n'
+printf '\n操作已结束，实际检测结果见上方；去程失败项最多自动重试3次，成功即更新；任务和 Agent 新样本可能仍在等待中。\n'
